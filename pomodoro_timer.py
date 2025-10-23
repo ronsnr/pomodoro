@@ -146,7 +146,7 @@ class PomodoroTimer:
         self.root.geometry("500x480")
         
         # Set minimum window size (prevents user from making it too small)
-        self.root.minsize(400, 400)
+        self.root.minsize(200, 200)
         
         # Set background color using hex color code
         # PYTHON LEARNING: #2c3e50 is a dark blue-gray color in hexadecimal
@@ -166,9 +166,13 @@ class PomodoroTimer:
         # AUDIO SYSTEM INITIALIZATION
         # ═══════════════════════════════════════════════════════════════
         
-        # Initialize pygame's sound system
+        # Initialize pygame's sound system with error handling
         # PYTHON LEARNING: Some libraries need to be "initialized" before use
-        pygame.mixer.init()
+        try:
+            pygame.mixer.init()
+        except:
+            # pygame not available - audio will use fallback methods
+            pass
         
         # ═══════════════════════════════════════════════════════════════
         # TIMER STATE VARIABLES - KEEPING TRACK OF WHAT'S HAPPENING
@@ -223,6 +227,9 @@ class PomodoroTimer:
         # PYTHON LEARNING: We separate this into its own method for organization
         self.create_widgets()
         
+        # Force button colors after creation (override macOS theme)
+        self.root.after(100, self.force_button_colors)
+        
         # Update the display to show initial values
         # PYTHON LEARNING: Always good to start with everything in sync
         self.update_display()
@@ -250,7 +257,6 @@ class PomodoroTimer:
         WIDGET HIERARCHY (parent → child relationships):
         root window
         └── main_container (Frame)
-            ├── title_label (Label)
             ├── session_label (Label)  
             ├── timer_container (Frame)
             │   └── time_label (Label)
@@ -291,23 +297,6 @@ class PomodoroTimer:
             padx=10,              # 10 pixels of padding on left and right
             pady=5                # 5 pixels of padding on top and bottom
         )
-        
-        # ═══════════════════════════════════════════════════════════════
-        # TITLE LABEL - "🍅 Pomodoro Timer"
-        # ═══════════════════════════════════════════════════════════════
-        
-        # PYTHON LEARNING: Labels display text that users can see but not edit
-        self.title_label = tk.Label(
-            main_container,                                        # Parent container
-            text="🍅 Pomodoro Timer",                             # Text to display
-            font=("Arial", self.title_font_size, "bold"),        # Font: family, size, style
-            bg="#2c3e50",                                         # Background color
-            fg="#ecf0f1"                                          # Foreground (text) color
-        )
-        
-        # Position the title at the top
-        # PYTHON LEARNING: pady adds vertical spacing around the widget
-        self.title_label.pack(pady=self.title_pady)
         
         # ═══════════════════════════════════════════════════════════════
         # SESSION TYPE LABEL - "Work Session", "Break", etc.
@@ -408,6 +397,11 @@ class PomodoroTimer:
             bg="#27ae60",                                   # Green background (go/start color)
             fg="white",                                     # White text
             width=button_width,                             # Responsive width
+            relief="flat",                                  # Flat relief to override system styling
+            borderwidth=0,                                  # No border
+            activebackground="#229954",                     # Darker green when clicked
+            activeforeground="white",                       # White text when clicked
+            highlightthickness=0,                           # Remove focus highlight
             command=self.start_timer                        # Function to call when clicked
         )
         
@@ -426,6 +420,11 @@ class PomodoroTimer:
             bg="#f39c12",                                   # Orange background (caution/pause color)
             fg="white",
             width=button_width,
+            relief="flat",                                  # Flat relief to override system styling
+            borderwidth=0,                                  # No border
+            activebackground="#e67e22",                     # Darker orange when clicked
+            activeforeground="white",                       # White text when clicked
+            highlightthickness=0,                           # Remove focus highlight
             command=self.pause_timer                        # Different function for pause
         )
         
@@ -442,6 +441,11 @@ class PomodoroTimer:
             bg="#e74c3c",                                   # Red background (stop/danger color)
             fg="white",
             width=button_width,
+            relief="flat",                                  # Flat relief to override system styling
+            borderwidth=0,                                  # No border
+            activebackground="#c0392b",                     # Darker red when clicked
+            activeforeground="white",                       # White text when clicked
+            highlightthickness=0,                           # Remove focus highlight
             command=self.reset_timer                        # Different function for reset
         )
         
@@ -469,6 +473,11 @@ class PomodoroTimer:
             font=("Arial", self.button_font_size),
             bg="#9b59b6",                                   # Purple background (settings color)
             fg="white",
+            relief="flat",                                  # Flat relief to override system styling
+            borderwidth=0,                                  # No border
+            activebackground="#8e44ad",                     # Darker purple when clicked
+            activeforeground="white",                       # White text when clicked
+            highlightthickness=0,                           # Remove focus highlight
             command=self.open_settings                      # Opens settings window
         )
         
@@ -903,6 +912,12 @@ class PomodoroTimer:
         # PYTHON LEARNING: Verify both conditions to be sure timer finished normally
         if self.time_left <= 0 and self.is_running:
             
+            # Final display update to show 00:00
+            self.root.after(0, self.update_display)
+            
+            # Brief pause to let user see 00:00
+            time.sleep(0.1)
+            
             # Schedule completion handler on main thread
             # PYTHON LEARNING: Another thread-safe GUI operation
             self.root.after(0, self.timer_finished)
@@ -1061,121 +1076,112 @@ class PomodoroTimer:
         
     def play_notification_sound(self):
         """
-        🔊 PYTHON LEARNING: Audio Generation, Error Handling, and Mathematical Concepts
+        🔊 PYTHON LEARNING: Audio Generation, Error Handling, and Fallback Strategies
         =============================================================================
         
-        This method creates and plays a notification sound using mathematical sound generation.
-        It demonstrates several advanced Python concepts:
+        This method creates and plays a notification sound with multiple fallback options.
+        It demonstrates several important Python concepts:
         
         1. TRY/EXCEPT ERROR HANDLING: Graceful handling of potential failures
-        2. MATHEMATICAL SOUND GENERATION: Creating audio waves using math
-        3. LIBRARY INTEGRATION: Using NumPy and pygame together
-        4. FALLBACK STRATEGIES: What to do when things go wrong
-        5. AUDIO PROGRAMMING: Understanding digital sound concepts
+        2. FALLBACK STRATEGIES: Multiple approaches when libraries aren't available
+        3. PLATFORM COMPATIBILITY: Working across different operating systems
+        4. IMPORT HANDLING: Dealing with missing dependencies gracefully
         
-        SOUND GENERATION PROCESS:
-        1. Define audio parameters (sample rate, duration, frequency)
-        2. Calculate number of audio frames needed
-        3. Generate sine wave using mathematical formula
-        4. Convert floating-point values to integer audio format
-        5. Create stereo sound and play through speakers
+        FALLBACK HIERARCHY:
+        1. Try pygame + numpy for high-quality generated sound
+        2. Fall back to system bell/beep sound
+        3. Final fallback to console beep
         
-        WHY GENERATE SOUNDS INSTEAD OF USING FILES:
-        - No external sound files needed (self-contained application)
-        - Cross-platform compatibility (works on all operating systems)
-        - Customizable tone and duration
-        - Smaller application size
+        WHY MULTIPLE FALLBACKS:
+        - Some systems may not have pygame/numpy installed
+        - Some systems may have audio restrictions
+        - Ensures notification works in any environment
         """
         
         # ═══════════════════════════════════════════════════════════════
-        # ERROR HANDLING - PROTECT AGAINST AUDIO FAILURES
+        # ATTEMPT 1: HIGH-QUALITY GENERATED SOUND (PYGAME + NUMPY)
         # ═══════════════════════════════════════════════════════════════
         
-        # PYTHON LEARNING: try/except blocks handle potential errors gracefully
-        # Audio systems can fail for many reasons (no speakers, permissions, etc.)
         try:
-            
-            # ═══════════════════════════════════════════════════════════
-            # AUDIO PARAMETERS - DEFINING THE SOUND CHARACTERISTICS
-            # ═══════════════════════════════════════════════════════════
-            
-            # PYTHON LEARNING: Audio Programming Concepts
-            sample_rate = 22050     # Samples per second (22,050 Hz = CD quality)
-            duration = 0.5          # Length of sound in seconds (half second)
-            frequency = 800         # Pitch of tone in Hertz (800 Hz = pleasant beep)
-            
-            # Import numpy locally (only when needed)
-            # PYTHON LEARNING: You can import libraries inside functions
+            # Try to import and use pygame with numpy for generated sound
             import numpy as np
             
-            # ═══════════════════════════════════════════════════════════
-            # CALCULATE AUDIO FRAMES
-            # ═══════════════════════════════════════════════════════════
+            # Audio parameters for pleasant notification sound
+            sample_rate = 22050     # CD-quality sample rate
+            duration = 0.5          # Half-second notification
+            frequency = 800         # Pleasant 800Hz tone
             
-            # PYTHON LEARNING: Mathematical calculation
-            # frames = duration × sample_rate
-            # Example: 0.5 seconds × 22,050 samples/second = 11,025 frames
+            # Calculate number of audio frames needed
             frames = int(duration * sample_rate)
             
-            # Create empty array to hold audio data
-            # PYTHON LEARNING: np.zeros() creates array filled with zeros
+            # Generate sine wave audio data
             arr = np.zeros(frames)
-            
-            # ═══════════════════════════════════════════════════════════
-            # GENERATE SINE WAVE - THE MATHEMATICAL MAGIC
-            # ═══════════════════════════════════════════════════════════
-            
-            # PYTHON LEARNING: for loop with range() to process each audio frame
             for i in range(frames):
-                
-                # PYTHON LEARNING: Mathematical Formula for Sound Waves
-                # arr[i] = sin(2π × frequency × time)
-                # This creates a pure sine wave at the specified frequency
                 arr[i] = np.sin(2 * np.pi * frequency * i / sample_rate)
-                
-                # MATH EXPLANATION:
-                # - np.sin() = sine function (creates wave shape)
-                # - 2 * np.pi = full circle in radians (360 degrees)
-                # - frequency = how many cycles per second
-                # - i / sample_rate = current time in seconds
-                
-            # ═══════════════════════════════════════════════════════════
-            # CONVERT TO AUDIO FORMAT
-            # ═══════════════════════════════════════════════════════════
             
-            # PYTHON LEARNING: Data Type Conversion
-            # Convert floating-point numbers (-1.0 to 1.0) to integers (-32767 to 32767)
-            # This is the format that audio systems expect
+            # Convert to proper audio format and create stereo sound
             arr = (arr * 32767).astype(np.int16)
-            
-            # EXPLANATION:
-            # - Multiply by 32767 to scale to full 16-bit range
-            # - .astype(np.int16) converts to 16-bit signed integers
-            
-            # ═══════════════════════════════════════════════════════════
-            # CREATE STEREO SOUND AND PLAY
-            # ═══════════════════════════════════════════════════════════
-            
-            # PYTHON LEARNING: Array Manipulation
-            # Create stereo sound by duplicating mono channel for left and right speakers
-            # np.array([arr, arr]).T creates 2-channel audio array
             sound = pygame.sndarray.make_sound(np.array([arr, arr]).T)
-            
-            # PYTHON LEARNING: Non-blocking function call
-            # .play() starts sound and immediately returns (doesn't wait for sound to finish)
             sound.play()
             
+            return  # Success! Exit method
+            
+        except (ImportError, Exception):
+            # pygame/numpy not available or audio system failed
+            pass
+            
         # ═══════════════════════════════════════════════════════════════
-        # ERROR HANDLING - FALLBACK TO SYSTEM BEEP
+        # ATTEMPT 2: SYSTEM BELL/BEEP (CROSS-PLATFORM)
         # ═══════════════════════════════════════════════════════════════
         
-        # PYTHON LEARNING: except clause catches ANY exception that occurs
-        except:
-            # If audio generation fails for any reason, use simple system beep
-            # PYTHON LEARNING: print("\a") triggers system alert sound
-            # \a is an "escape character" that means "alert/bell"
-            print("\a")
+        try:
+            # Try platform-specific system notification sounds
+            import subprocess
+            import platform
             
+            system = platform.system().lower()
+            
+            if system == "darwin":  # macOS
+                # Use macOS system alert sound
+                subprocess.run(["afplay", "/System/Library/Sounds/Glass.aiff"], 
+                             check=False, capture_output=True)
+                return
+                
+            elif system == "linux":  # Linux
+                # Try common Linux notification commands
+                try:
+                    subprocess.run(["paplay", "/usr/share/sounds/alsa/Front_Left.wav"], 
+                                 check=False, capture_output=True, timeout=1)
+                    return
+                except:
+                    subprocess.run(["speaker-test", "-t", "sine", "-f", "800", "-l", "1"], 
+                                 check=False, capture_output=True, timeout=1)
+                    return
+                    
+            elif system == "windows":  # Windows
+                # Use Windows system beep
+                import winsound
+                winsound.Beep(800, 500)  # 800Hz for 500ms
+                return
+                
+        except (ImportError, Exception):
+            # System-specific methods failed
+            pass
+            
+        # ═══════════════════════════════════════════════════════════════
+        # ATTEMPT 3: CONSOLE BELL (UNIVERSAL FALLBACK)
+        # ═══════════════════════════════════════════════════════════════
+        
+        try:
+            # Universal fallback - console bell character
+            # This should work on virtually any system
+            print("\a" * 3)  # Triple beep for more noticeable notification
+            
+        except Exception:
+            # Even console beep failed - silent notification
+            # This should never happen, but just in case...
+            pass
+        
     def update_display(self):
         """
         🖥️ PYTHON LEARNING: String Formatting, Dictionaries, and Mathematical Operations
@@ -1479,6 +1485,93 @@ class PomodoroTimer:
             # This happens when widgets haven't been created yet
             # During initialization, this method might run before create_widgets()
             # PYTHON LEARNING: pass statement does nothing - silently ignore the error
+            pass
+
+    def force_button_colors(self):
+        """
+        🎨 PYTHON LEARNING: Aggressive Color Override for macOS
+        =====================================================
+        
+        This method forces custom button colors on macOS systems where the
+        Aqua theme tends to override custom styling. It demonstrates:
+        
+        1. TRY/EXCEPT ERROR HANDLING: Gracefully handling missing widgets
+        2. AGGRESSIVE STYLING: Multiple color properties to override themes
+        3. DELAYED EXECUTION: Running after initial widget creation
+        4. CROSS-PLATFORM COMPATIBILITY: Working around OS-specific issues
+        
+        MACOS BUTTON COLOR ISSUES:
+        - macOS Aqua theme often ignores custom button background colors
+        - System theme takes precedence over tkinter styling
+        - Multiple properties needed to fully override system appearance
+        - Timing matters - must run after widgets are fully initialized
+        
+        SOLUTION STRATEGY:
+        - Set background, foreground, and active colors explicitly
+        - Use relief="flat" and borderwidth=0 to minimize system styling
+        - Run with delay to ensure widgets are fully initialized
+        """
+        
+        try:
+            # ═══════════════════════════════════════════════════════════════
+            # START BUTTON - GREEN COLOR SCHEME
+            # ═══════════════════════════════════════════════════════════════
+            
+            self.start_button.config(
+                bg="#27ae60",                    # Main green background
+                fg="white",                      # White text
+                activebackground="#229954",      # Darker green when clicked
+                activeforeground="white",        # Keep text white when clicked
+                relief="flat",                   # Flat appearance
+                borderwidth=0,                   # No border
+                highlightthickness=0             # No focus highlight
+            )
+            
+            # ═══════════════════════════════════════════════════════════════
+            # PAUSE BUTTON - ORANGE COLOR SCHEME
+            # ═══════════════════════════════════════════════════════════════
+            
+            self.pause_button.config(
+                bg="#f39c12",                    # Main orange background
+                fg="white",                      # White text
+                activebackground="#e67e22",      # Darker orange when clicked
+                activeforeground="white",        # Keep text white when clicked
+                relief="flat",                   # Flat appearance
+                borderwidth=0,                   # No border
+                highlightthickness=0             # No focus highlight
+            )
+            
+            # ═══════════════════════════════════════════════════════════════
+            # RESET BUTTON - RED COLOR SCHEME
+            # ═══════════════════════════════════════════════════════════════
+            
+            self.reset_button.config(
+                bg="#e74c3c",                    # Main red background
+                fg="white",                      # White text
+                activebackground="#c0392b",      # Darker red when clicked
+                activeforeground="white",        # Keep text white when clicked
+                relief="flat",                   # Flat appearance
+                borderwidth=0,                   # No border
+                highlightthickness=0             # No focus highlight
+            )
+            
+            # ═══════════════════════════════════════════════════════════════
+            # SETTINGS BUTTON - PURPLE COLOR SCHEME
+            # ═══════════════════════════════════════════════════════════════
+            
+            self.settings_button.config(
+                bg="#9b59b6",                    # Main purple background
+                fg="white",                      # White text
+                activebackground="#8e44ad",      # Darker purple when clicked
+                activeforeground="white",        # Keep text white when clicked
+                relief="flat",                   # Flat appearance
+                borderwidth=0,                   # No border
+                highlightthickness=0             # No focus highlight
+            )
+            
+        except AttributeError:
+            # Widgets not created yet - this will be called again later
+            # PYTHON LEARNING: Graceful error handling for timing issues
             pass
 
 def main():
