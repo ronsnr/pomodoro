@@ -2,8 +2,10 @@
 # These lines import the necessary libraries (modules) that your script needs to run.
 
 import tkinter
-from tkinter import ttk
+from tkinter import ttk, simpledialog
 import math
+from datetime import datetime
+import os
 
 # This is a 'try-except' block. It's a way to handle potential errors gracefully.
 try:
@@ -41,6 +43,7 @@ pomodoros_completed = 0
 timer = None
 rectangle_id = None # Stores the unique ID for the canvas rectangle, so we can modify it later.
 timer_text_id = None # Stores the unique ID for the canvas text, so we can update the time.
+current_task = None # Stores the description of the current task.
 
 # --- TIMER ACTIONS --- #
 # These functions are "event handlers" that run when you click the corresponding buttons.
@@ -48,9 +51,16 @@ timer_text_id = None # Stores the unique ID for the canvas text, so we can updat
 def start_work():
     """Starts a work session timer."""
     reset_timer(silent=True)  # Stop any existing timer without resetting the checkmarks.
-    title_label.config(text="Work")  # Change the title label to "Work".
-    style.configure("Title.TLabel", foreground=GREEN)  # Change the title color to green.
-    count_down(WORK_MIN * 60)  # Start the countdown with the work duration (in seconds).
+    global current_task
+    # Prompt the user for the task they are working on.
+    task = simpledialog.askstring("New Task", "What are you working on?", parent=window)
+
+    # Only start the timer if the user entered a task.
+    if task:
+        current_task = task
+        title_label.config(text=f"Work: {current_task}")  # Update the title to show the current task.
+        style.configure("Title.TLabel", foreground=GREEN)  # Change the title color to green.
+        count_down(WORK_MIN * 60)  # Start the countdown with the work duration (in seconds).
 
 def start_short_break():
     """Starts a short break timer."""
@@ -96,6 +106,7 @@ def count_down(count):
     """Handles the timer countdown logic and updates the display every second."""
     # We need to modify the global 'timer' and 'pomodoros_completed' variables.
     global timer
+    global current_task
     global pomodoros_completed
     
     # 'math.floor' gives the whole number part of a division (e.g., 155 / 60 = 2.58 -> 2).
@@ -119,13 +130,36 @@ def count_down(count):
         timer = window.after(1000, count_down, count - 1)
     else:
         # When the count reaches 0, the timer is done.
-        playsound('ring.wav')  # Play the notification sound.
-        # Check if the session that just ended was a "Work" session.
-        if title_label.cget("text") == "Work":
+        # --- Sound Notification with Fallback ---
+        # This try/except block prevents the app from crashing if the sound file is missing or there's an audio error.
+        sound_file = 'ring.wav'
+        try:
+            if os.path.exists(sound_file):
+                playsound(sound_file)
+            else:
+                print(f"Warning: Sound file '{sound_file}' not found. Using system bell.")
+                window.bell() # Use a simple system beep as a fallback.
+        except Exception as e:
+            print(f"Error playing sound: {e}. Using system bell as a fallback.")
+            window.bell() # Use a simple system beep as a fallback.
+        # Check if the session that just ended was a "Work" session by checking the title.
+        if title_label.cget("text").startswith("Work"):
             pomodoros_completed += 1  # Increment the counter.
             # Update the checkmarks label to show the new total.
             # In Python, multiplying a string repeats it (e.g., "A" * 3 is "AAA").
             check_marks.config(text="✔" * pomodoros_completed)
+
+            # --- LOG THE COMPLETED TASK TO A FILE ---
+            if current_task:
+                # Get the current date to use in the filename.
+                today_str = datetime.now().strftime("%Y-%m-%d")
+                filename = f"{today_str}_Completed-Pomodoro-Tasks.txt"
+                # Get a full timestamp for the log entry.
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                # Open the file in "append" mode ('a') and write the new log entry.
+                with open(filename, "a") as file:
+                    file.write(f"[{timestamp}] Completed: {current_task}\n")
+                current_task = None # Clear the task after it has been logged.
 
 # --- UI SETUP --- #
 # This section creates the main window and all the visual elements (widgets).
@@ -167,7 +201,7 @@ style = ttk.Style()
 # Define a custom style named "Title.TLabel".
 style.configure("Title.TLabel",
                 foreground=GREEN,  # Set the text color.
-                font=(FONT_NAME, 30, "bold"))  # Set the font, size, and weight.
+                font=(FONT_NAME, 15, "bold"))  # Set the font, size, and weight.
 
 # Define a custom style for the checkmarks label.
 style.configure("Check.TLabel",
